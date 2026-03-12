@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍰 甜點消消樂</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --pink: #E8738A;
+  --pink-light: #FFB3C6;
+  --purple: #9B5CF6;
+  --orange: #FB923C;
+}
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #FFE4F0 0%, #FFF5E4 45%, #EAE4FF 100%);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px;
+  gap: 12px;
+}
+
+/* ══════════ HEADER ══════════ */
+h1 {
+  font-size: 2rem;
+  background: linear-gradient(135deg, #E8738A, #9B5CF6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 3px;
+  filter: drop-shadow(1px 2px 0 rgba(232,115,138,0.2));
+}
+
+/* ══════════ LEVEL INFO ══════════ */
+.level-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #9B5CF6;
+  letter-spacing: 1px;
+}
+
+.level-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.level-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  background: white;
+  transition: all 0.3s;
+}
+.level-dot.done   { background: #9B5CF6; border-color: #9B5CF6; }
+.level-dot.active { background: #E8738A; border-color: #E8738A; transform: scale(1.3); }
+
+/* ══════════ GAME AREA ══════════ */
+.game-area {
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 16px 20px 18px;
+  box-shadow: 0 8px 40px rgba(200,100,150,0.15), inset 0 1px 0 rgba(255,255,255,0.9);
+  border: 1.5px solid rgba(255,180,210,0.4);
+  overflow: auto;
+  max-width: 98vw;
+}
+
+/* ══════════ STATUS BAR ══════════ */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.stat {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #b07090;
+  background: rgba(255,180,210,0.18);
+  padding: 4px 12px;
+  border-radius: 50px;
+}
+.stat b { color: var(--pink); }
+
+/* ══════════ BOARD ══════════ */
+.board {
+  position: relative;
+}
+
+/* ══════════ TILE ══════════ */
+.tile {
+  position: absolute;
+  width: 68px;
+  height: 68px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  user-select: none;
+  border: 2px solid rgba(255,255,255,0.85);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.13), inset 0 1px 0 rgba(255,255,255,0.65);
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s;
+}
+
+.tile.accessible { cursor: pointer; }
+.tile.accessible:hover {
+  transform: translateY(-5px) scale(1.08) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.7);
+  z-index: 9000 !important;
+}
+.tile.blocked { filter: brightness(0.76) saturate(0.55); cursor: default; }
+
+/* Eliminate mode: ALL tiles glow + float */
+.board.elim-mode .tile {
+  cursor: crosshair !important;
+  filter: none !important;
+}
+.board.elim-mode .tile.accessible {
+  animation: floatPulse 0.9s ease-in-out infinite;
+  box-shadow: 0 0 0 2.5px #FB923C, 0 6px 20px rgba(251,146,60,0.35);
+}
+.board.elim-mode .tile.blocked {
+  opacity: 0.75;
+  box-shadow: 0 0 0 2px rgba(251,146,60,0.4);
+}
+
+@keyframes floatPulse {
+  0%,100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-5px) scale(1.05); }
+}
+
+@keyframes tileLeave {
+  0%   { transform: scale(1) translateY(0); opacity: 1; }
+  40%  { transform: scale(1.3) translateY(-10px); opacity: 0.8; }
+  100% { transform: scale(0) translateY(-20px); opacity: 0; }
+}
+@keyframes tileMatch {
+  0%   { transform: scale(1); filter: brightness(1); }
+  35%  { transform: scale(1.45); filter: brightness(1.5); }
+  100% { transform: scale(0) rotate(20deg); opacity: 0; }
+}
+
+/* ══════════ TRAY ══════════ */
+.tray-label {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #c07090;
+  font-weight: 600;
+  margin: 10px 0 5px;
+  letter-spacing: 0.5px;
+}
+.tray {
+  display: flex;
+  gap: 5px;
+  padding: 9px 10px;
+  background: rgba(255,220,235,0.38);
+  border-radius: 16px;
+  border: 2px dashed rgba(232,115,138,0.3);
+  transition: border-color 0.3s, box-shadow 0.3s;
+  flex-wrap: nowrap;
+}
+.tray.danger {
+  border-color: rgba(220,38,38,0.55);
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.1);
+  animation: shakeIt 0.45s ease;
+}
+@keyframes shakeIt {
+  0%,100%{ transform:translateX(0); }
+  20%    { transform:translateX(-6px); }
+  40%    { transform:translateX(6px); }
+  60%    { transform:translateX(-4px); }
+  80%    { transform:translateX(4px); }
+}
+
+.tray-slot {
+  width: 58px;
+  height: 58px;
+  border-radius: 11px;
+  border: 2px dashed rgba(200,140,160,0.3);
+  background: rgba(255,255,255,0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 25px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.tray-slot.filled {
+  border-style: solid;
+  border-color: rgba(255,255,255,0.75);
+  box-shadow: 0 3px 9px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.55);
+  animation: slotPop 0.22s cubic-bezier(0.34,1.56,0.64,1);
+}
+.tray-slot.duo { box-shadow: 0 0 0 2.5px gold, 0 3px 9px rgba(0,0,0,0.08); }
+
+@keyframes slotPop {
+  from { transform: scale(0.55); }
+  to   { transform: scale(1); }
+}
+
+/* ══════════ POWERS ══════════ */
+.powers {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.power-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  border-radius: 50px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: white;
+  transition: transform 0.2s, filter 0.2s;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.power-btn.undo-btn {
+  background: linear-gradient(135deg,#A78BFA,#7C3AED);
+  box-shadow: 0 4px 14px rgba(124,58,237,0.32);
+}
+.power-btn.elim-btn {
+  background: linear-gradient(135deg,#FB923C,#EA580C);
+  box-shadow: 0 4px 14px rgba(234,88,12,0.32);
+}
+.power-btn.elim-btn.active {
+  background: linear-gradient(135deg,#EF4444,#B91C1C);
+  box-shadow: 0 4px 14px rgba(185,28,28,0.4);
+  animation: btnPulse 0.65s ease-in-out infinite;
+}
+@keyframes btnPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.05);} }
+
+.power-btn:hover:not(:disabled) { transform:translateY(-2px); filter:brightness(1.1); }
+.power-btn:disabled { opacity:0.35; cursor:not-allowed; transform:none !important; filter:none !important; box-shadow:none; }
+
+.badge {
+  background: rgba(255,255,255,0.28);
+  border-radius: 50px;
+  padding: 1px 8px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+/* ══════════ SCORE POPUP ══════════ */
+.score-pop {
+  position: fixed;
+  font-size: 1.3rem;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 8888;
+  animation: scoreFloat 1s ease-out forwards;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+@keyframes scoreFloat {
+  0%   { transform:translateY(0) scale(1); opacity:1; }
+  100% { transform:translateY(-70px) scale(1.15); opacity:0; }
+}
+
+/* ══════════ MODAL ══════════ */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(20,10,30,0.42);
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+
+.modal-box {
+  background: white;
+  border-radius: 28px;
+  padding: 36px 44px;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.24);
+  animation: modalIn 0.38s cubic-bezier(0.34,1.56,0.64,1);
+  max-width: 360px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+@keyframes modalIn {
+  from { transform:scale(0.5); opacity:0; }
+  to   { transform:scale(1); opacity:1; }
+}
+.modal-emoji { font-size: 4rem; margin-bottom: 8px; }
+.modal-title { font-size: 1.7rem; font-weight: 900; margin-bottom: 6px; }
+.modal-msg   { color: #9B7090; font-size: 0.95rem; margin-bottom: 6px; line-height: 1.6; }
+
+.reward-box {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 14px 0 20px;
+}
+.reward-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 50px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: white;
+}
+.reward-item.undo-r { background: linear-gradient(135deg,#A78BFA,#7C3AED); }
+.reward-item.elim-r { background: linear-gradient(135deg,#FB923C,#EA580C); }
+
+.modal-btn {
+  padding: 12px 34px;
+  border-radius: 50px;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.modal-btn:hover { transform: scale(1.05); }
+.modal-btn.next   { background: linear-gradient(135deg,#E8738A,#C94B6B); box-shadow:0 6px 18px rgba(232,115,138,0.4); }
+.modal-btn.retry  { background: linear-gradient(135deg,#9B5CF6,#7C3AED); box-shadow:0 6px 18px rgba(124,58,237,0.35); }
+.modal-btn.finish { background: linear-gradient(135deg,#F59E0B,#D97706); box-shadow:0 6px 18px rgba(217,119,6,0.4); }
+
+/* Confetti */
+.confetti {
+  position: absolute;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  animation: confettiFall linear forwards;
+  pointer-events: none;
+}
+@keyframes confettiFall {
+  0%   { transform:translateY(-10px) rotate(0deg); opacity:1; }
+  100% { transform:translateY(280px) rotate(540deg); opacity:0; }
+}
+
+/* ══════════ DEBUG ══════════ */
+.debug-wrap { width: 100%; max-width: 480px; }
+details {
+  background: rgba(0,0,0,0.045);
+  border-radius: 14px;
+  padding: 9px 14px;
+  font-size: 0.79rem;
+  color: #aaa;
+}
+summary { cursor:pointer; font-weight:700; color:#bbb; list-style:none; }
+summary::-webkit-details-marker { display:none; }
+.dbg-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:9px; }
+.dbg-item { display:flex; flex-direction:column; gap:3px; }
+.dbg-item label { font-size:0.74rem; color:#bbb; }
+.dbg-item input[type=range] { accent-color:var(--pink); width:100%; }
+.dbg-btn {
+  padding:4px 10px; border-radius:8px; border:1px solid #e0e0e0;
+  background:white; cursor:pointer; font-size:0.77rem;
+  transition:background 0.2s;
+}
+.dbg-btn:hover { background:#f8f0f5; }
+</style>
+</head>
+<body>
+
+<h1>🍰 甜點消消樂</h1>
+
+<!-- Level progress -->
+<div class="level-bar">
+  <div class="level-title" id="level-title">載入中...</div>
+  <div class="level-dots" id="level-dots"></div>
+</div>
+
+<!-- Game area -->
+<div class="game-area" id="game-area">
+  <div class="status-bar">
+    <div class="stat">剩餘牌數 <b id="remaining">-</b></div>
+    <div class="stat">手牌 <b id="tray-count">0</b> / <b id="tray-max">7</b></div>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="tray-label">── 手牌槽（集滿3張自動消除）──</div>
+  <div class="tray" id="tray"></div>
+</div>
+
+<!-- Powers -->
+<div class="powers">
+  <button class="power-btn undo-btn" id="undo-btn" onclick="useUndo()">
+    ↩ 返回 <span class="badge" id="undo-badge">×1</span>
+  </button>
+  <button class="power-btn elim-btn" id="elim-btn" onclick="toggleElim()">
+    ⭐ 消除 <span class="badge" id="elim-badge">×1</span>
+  </button>
+</div>
+
+<!-- Debug -->
+<div class="debug-wrap">
+  <details>
+    <summary>🔧 Debug 面板</summary>
+    <div class="dbg-grid">
+      <div class="dbg-item">
+        <label>手牌槽上限: <b id="dbg-tray-val">7</b></label>
+        <input type="range" min="4" max="10" value="7"
+          oninput="TRAY_MAX=+this.value; document.getElementById('dbg-tray-val').textContent=this.value; updateUI()">
+      </div>
+      <div class="dbg-item">
+        <label>動畫速度: <b id="dbg-anim-val">1.0</b>×</label>
+        <input type="range" min="0.2" max="3" step="0.1" value="1"
+          oninput="ANIM_SPEED=1/this.value; document.getElementById('dbg-anim-val').textContent=parseFloat(this.value).toFixed(1)">
+      </div>
+      <div class="dbg-item">
+        <button class="dbg-btn" onclick="state.undoCount+=3; state.elimCount+=3; updateUI()">+3 道具</button>
+      </div>
+      <div class="dbg-item">
+        <button class="dbg-btn" onclick="startLevel(state.levelIdx)">重置本關</button>
+      </div>
+      <div class="dbg-item">
+        <button class="dbg-btn" onclick="goToLevel(0)">回第1關</button>
+      </div>
+      <div class="dbg-item">
+        <button class="dbg-btn" onclick="skipLevel()">跳過本關</button>
+      </div>
+    </div>
+  </details>
+</div>
+
+<!-- Level Complete Modal -->
+<div class="modal-overlay" id="modal-levelclear">
+  <div class="modal-box" id="lc-box">
+    <div class="modal-emoji">🎊</div>
+    <div class="modal-title" style="color:#E8738A" id="lc-title">關卡完成！</div>
+    <div class="modal-msg" id="lc-msg">太棒了！獲得道具獎勵：</div>
+    <div class="reward-box">
+      <div class="reward-item undo-r">↩ 返回 <span id="lc-undo-after"></span></div>
+      <div class="reward-item elim-r">⭐ 消除 <span id="lc-elim-after"></span></div>
+    </div>
+    <button class="modal-btn next" id="lc-next-btn" onclick="proceedNext()">下一關 →</button>
+  </div>
+</div>
+
+<!-- All Clear Modal -->
+<div class="modal-overlay" id="modal-allclear">
+  <div class="modal-box" id="ac-box">
+    <div class="modal-emoji">👑</div>
+    <div class="modal-title" style="color:#F59E0B">全關卡制霸！</div>
+    <div class="modal-msg">你清空了甜點山脈的所有美食！<br>真是甜點大師！</div>
+    <button class="modal-btn finish" onclick="closeModal('modal-allclear'); goToLevel(0)">再戰一次 !</button>
+  </div>
+</div>
+
+<!-- Lose Modal -->
+<div class="modal-overlay" id="modal-lose">
+  <div class="modal-box">
+    <div class="modal-emoji">😢</div>
+    <div class="modal-title" style="color:#9B5CF6">撐不住了！</div>
+    <div class="modal-msg">手牌槽塞滿啦，甜點太多吃不完...<br>道具不會重置，繼續加油！</div>
+    <button class="modal-btn retry" onclick="closeModal('modal-lose'); startLevel(state.levelIdx)">再試一次</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONSTANTS & CONFIG
+// ═══════════════════════════════════════════════
+let TRAY_MAX  = 7;
+let ANIM_SPEED = 1; // multiplier for setTimeout durations
+
+const STEP   = 76;   // tile size + gap
+const TILE_W = 68;
+const OFFSET = 38;   // per-layer pixel offset (STEP/2)
+
+// ─── Tile types (12 total) ───
+const TYPES = [
+  {id:'cake',     emoji:'🍰', bg:'linear-gradient(140deg,#FFAFC5,#FF6B8A)'},
+  {id:'donut',    emoji:'🍩', bg:'linear-gradient(140deg,#FFD4A3,#FFAB6B)'},
+  {id:'cupcake',  emoji:'🧁', bg:'linear-gradient(140deg,#F4B3FF,#C468FF)'},
+  {id:'pudding',  emoji:'🍮', bg:'linear-gradient(140deg,#FFE878,#FFB800)'},
+  {id:'cookie',   emoji:'🍪', bg:'linear-gradient(140deg,#D4B896,#B8936A)'},
+  {id:'choco',    emoji:'🍫', bg:'linear-gradient(140deg,#C4956A,#7A4A28)'},
+  {id:'icecream', emoji:'🍦', bg:'linear-gradient(140deg,#B3F0FF,#5BCFEF)'},
+  {id:'bday',     emoji:'🎂', bg:'linear-gradient(140deg,#FFB3D9,#FF4DA6)'},
+  {id:'candy',    emoji:'🍬', bg:'linear-gradient(140deg,#FF9E9E,#E83030)'},
+  {id:'lolly',    emoji:'🍭', bg:'linear-gradient(140deg,#A8FFB3,#2DB83D)'},
+  {id:'waffle',   emoji:'🧇', bg:'linear-gradient(140deg,#FFD98A,#E8920A)'},
+  {id:'dango',    emoji:'🍡', bg:'linear-gradient(140deg,#FFB3A3,#FF6040)'},
+];
+
+// ─── Layout helper ───
+function makeGrid(cols, rows, layer, sx=30, sy=30) {
+  const tiles = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      tiles.push({ x: sx + c*STEP + layer*OFFSET, y: sy + r*STEP + layer*OFFSET, layer });
+  return tiles;
+}
+
+// ─── Level definitions ───
+const LEVELS = [
+  {
+    name: 'Lv.1 入門甜點島', sub: '18 張牌 · 3 層堆疊',
+    typeCount: 6,
+    layout: [
+      ...makeGrid(4,3,0),   // 12
+      ...makeGrid(2,2,1),   //  4
+      ...makeGrid(2,1,2),   //  2  → 18 ✓
+    ],
+    bw: 380, bh: 300,
+  },
+  {
+    name: 'Lv.2 糖果迷宮', sub: '24 張牌 · 4 層堆疊',
+    typeCount: 8,
+    layout: [
+      ...makeGrid(4,3,0),   // 12
+      ...makeGrid(3,2,1),   //  6
+      ...makeGrid(2,2,2),   //  4
+      ...makeGrid(2,1,3),   //  2  → 24 ✓
+    ],
+    bw: 390, bh: 310,
+  },
+  {
+    name: 'Lv.3 甜點堡壘', sub: '27 張牌 · 4 層堆疊',
+    typeCount: 9,
+    layout: [
+      ...makeGrid(5,3,0),   // 15
+      ...makeGrid(3,2,1),   //  6
+      ...makeGrid(2,2,2),   //  4
+      ...makeGrid(1,2,3),   //  2  → 27 ✓
+    ],
+    bw: 448, bh: 340,
+  },
+  {
+    name: 'Lv.4 糖霜王國', sub: '30 張牌 · 4 層堆疊',
+    typeCount: 10,
+    layout: [
+      ...makeGrid(5,3,0),   // 15
+      ...makeGrid(3,3,1),   //  9
+      ...makeGrid(2,2,2),   //  4
+      ...makeGrid(2,1,3),   //  2  → 30 ✓
+    ],
+    bw: 448, bh: 348,
+  },
+  {
+    name: 'Lv.5 甜點山脈', sub: '36 張牌 · 5 層堆疊',
+    typeCount: 12,
+    layout: [
+      ...makeGrid(5,4,0),   // 20
+      ...makeGrid(4,2,1),   //  8
+      ...makeGrid(3,2,2),   //  6
+      ...makeGrid(2,1,3),   //  2  → 36 ✓
+    ],
+    bw: 448, bh: 392,
+  },
+];
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const state = {
+  levelIdx:   0,
+  tiles:      [],
+  tray:       [],
+  undoCount:  1,
+  elimCount:  1,
+  elimMode:   false,
+  lastSnap:   null,
+};
+
+// ═══════════════════════════════════════════════
+// LEVEL FLOW
+// ═══════════════════════════════════════════════
+function goToLevel(idx) {
+  closeModal('modal-allclear');
+  closeModal('modal-levelclear');
+  state.undoCount = 1;
+  state.elimCount = 1;
+  startLevel(idx);
+}
+
+function startLevel(idx) {
+  closeModal('modal-lose');
+  closeModal('modal-levelclear');
+
+  state.levelIdx  = idx;
+  state.tray      = [];
+  state.elimMode  = false;
+  state.lastSnap  = null;
+
+  const lv = LEVELS[idx];
+
+  // Shuffle types
+  const pool = [];
+  for (let i = 0; i < lv.typeCount; i++)
+    pool.push(TYPES[i].id, TYPES[i].id, TYPES[i].id);
+  shuffle(pool);
+
+  state.tiles = lv.layout.map((pos, i) => ({
+    id: i, typeId: pool[i],
+    x: pos.x, y: pos.y, layer: pos.layer,
+    removed: false, el: null,
+  }));
+
+  // Size board
+  const board = document.getElementById('board');
+  board.style.width  = lv.bw + 'px';
+  board.style.height = lv.bh + 'px';
+
+  render();
+  renderLevelBar();
+}
+
+function skipLevel() {
+  const next = state.levelIdx + 1;
+  if (next >= LEVELS.length) { goToLevel(0); return; }
+  state.undoCount++;
+  state.elimCount++;
+  startLevel(next);
+}
+
+function proceedNext() {
+  closeModal('modal-levelclear');
+  const next = state.levelIdx + 1;
+  if (next >= LEVELS.length) {
+    spawnConfetti('ac-box');
+    document.getElementById('modal-allclear').classList.add('show');
+  } else {
+    startLevel(next);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// ACCESSIBILITY
+// ═══════════════════════════════════════════════
+function isAccessible(tile) {
+  if (tile.removed) return false;
+  return !state.tiles.some(o =>
+    !o.removed && o.id !== tile.id &&
+    o.layer > tile.layer &&
+    Math.abs(o.x - tile.x) < TILE_W &&
+    Math.abs(o.y - tile.y) < TILE_W
+  );
+}
+
+// ═══════════════════════════════════════════════
+// CLICK TILE
+// ═══════════════════════════════════════════════
+function clickTile(id) {
+  const tile = state.tiles.find(t => t.id === id);
+  if (!tile || tile.removed) return;
+
+  if (state.elimMode) { doElim(tile); return; }
+  if (!isAccessible(tile)) return;
+
+  // Save snap
+  state.lastSnap = { tileId: id, tray: [...state.tray] };
+
+  // Animate → move to tray
+  animOut(tile, () => {
+    tile.removed = true;
+    insertTray(tile.typeId);
+    checkMatch(tile.typeId);
+    checkEnd();
+    render();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// TRAY
+// ═══════════════════════════════════════════════
+function insertTray(typeId) {
+  const last = state.tray.lastIndexOf(typeId);
+  if (last >= 0) state.tray.splice(last + 1, 0, typeId);
+  else           state.tray.push(typeId);
+}
+
+function checkMatch(typeId) {
+  if (state.tray.filter(t => t === typeId).length >= 3) {
+    let n = 0;
+    state.tray = state.tray.filter(t => !(t === typeId && n++ < 3));
+    const type = TYPES.find(t => t.id === typeId);
+    showPop(`${type.emoji}×3 消除！`, '#E8738A');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// POWERS
+// ═══════════════════════════════════════════════
+function useUndo() {
+  if (state.undoCount <= 0 || !state.lastSnap) return;
+  state.undoCount--;
+  const { tileId, tray } = state.lastSnap;
+  const tile = state.tiles.find(t => t.id === tileId);
+  if (tile) tile.removed = false;
+  state.tray = [...tray];
+  state.lastSnap = null;
+  render();
+}
+
+function toggleElim() {
+  if (state.elimCount <= 0) return;
+  state.elimMode = !state.elimMode;
+  render();
+}
+
+function doElim(tile) {
+  state.elimCount--;
+  state.elimMode = false;
+
+  const typeId = tile.typeId;
+  let removed = 0;
+
+  // Remove from tray first
+  state.tray = state.tray.filter(t => !(t === typeId && removed++ < 3));
+
+  // Remove from board to reach 3 total
+  state.tiles
+    .filter(t => !t.removed && t.typeId === typeId)
+    .forEach(t => { if (removed < 3) { t.removed = true; removed++; } });
+
+  const type = TYPES.find(t => t.id === typeId);
+  showPop(`⭐ ${type.emoji} 神力消除！`, '#FB923C');
+  checkEnd();
+  render();
+}
+
+// ═══════════════════════════════════════════════
+// END CONDITIONS
+// ═══════════════════════════════════════════════
+function checkEnd() {
+  if (state.tiles.every(t => t.removed) && state.tray.length === 0) {
+    // Level complete!
+    const lv = LEVELS[state.levelIdx];
+    const isLast = state.levelIdx === LEVELS.length - 1;
+
+    state.undoCount++;
+    state.elimCount++;
+
+    setTimeout(() => {
+      if (isLast) {
+        spawnConfetti('ac-box');
+        document.getElementById('modal-allclear').classList.add('show');
+      } else {
+        spawnConfetti('lc-box');
+        document.getElementById('lc-title').textContent = lv.name.replace(/^Lv\.\d+ /, '') + ' 完成！';
+        document.getElementById('lc-msg').textContent  = '已獲得道具獎勵，可累加使用：';
+        document.getElementById('lc-undo-after').textContent = `× ${state.undoCount}`;
+        document.getElementById('lc-elim-after').textContent = `× ${state.elimCount}`;
+        const nextName = LEVELS[state.levelIdx + 1]?.name ?? '';
+        document.getElementById('lc-next-btn').textContent = `前往 ${nextName} →`;
+        document.getElementById('modal-levelclear').classList.add('show');
+      }
+    }, Math.round(450 * ANIM_SPEED));
+    return;
+  }
+
+  if (state.tray.length >= TRAY_MAX) {
+    setTimeout(() => document.getElementById('modal-lose').classList.add('show'),
+      Math.round(320 * ANIM_SPEED));
+  }
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function render() {
+  renderBoard();
+  renderTray();
+  updateUI();
+}
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  board.classList.toggle('elim-mode', state.elimMode);
+
+  state.tiles
+    .filter(t => !t.removed)
+    .sort((a, b) => a.layer - b.layer)
+    .forEach(tile => {
+      const type = TYPES.find(t => t.id === tile.typeId);
+      const acc  = isAccessible(tile);
+
+      const el = document.createElement('div');
+      el.className = `tile ${acc ? 'accessible' : 'blocked'}`;
+      el.style.cssText = `
+        left:${tile.x}px; top:${tile.y}px;
+        background:${type.bg};
+        z-index:${tile.layer * 100 + 10};
+      `;
+      el.textContent = type.emoji;
+      el.title = `${type.emoji} (層 ${tile.layer})`;
+
+      // In elim mode, all tiles are clickable
+      if (acc || state.elimMode) {
+        el.addEventListener('click', () => clickTile(tile.id));
+      }
+
+      tile.el = el;
+      board.appendChild(el);
+    });
+}
+
+function renderTray() {
+  const tray = document.getElementById('tray');
+  tray.innerHTML = '';
+  tray.classList.toggle('danger', state.tray.length >= TRAY_MAX - 1 && state.tray.length > 0);
+
+  for (let i = 0; i < TRAY_MAX; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'tray-slot';
+    if (state.tray[i]) {
+      const type = TYPES.find(t => t.id === state.tray[i]);
+      slot.classList.add('filled');
+      slot.style.background = type.bg;
+      slot.textContent = type.emoji;
+      const cnt = state.tray.filter(x => x === state.tray[i]).length;
+      if (cnt === 2) slot.classList.add('duo');
+    }
+    tray.appendChild(slot);
+  }
+}
+
+function updateUI() {
+  document.getElementById('remaining').textContent =
+    state.tiles.filter(t => !t.removed).length;
+  document.getElementById('tray-count').textContent = state.tray.length;
+  document.getElementById('tray-max').textContent   = TRAY_MAX;
+
+  // Undo button
+  const undoBtn = document.getElementById('undo-btn');
+  undoBtn.disabled = state.undoCount <= 0 || !state.lastSnap;
+  document.getElementById('undo-badge').textContent = `×${state.undoCount}`;
+
+  // Elim button
+  const elimBtn = document.getElementById('elim-btn');
+  elimBtn.disabled = state.elimCount <= 0;
+  elimBtn.classList.toggle('active', state.elimMode);
+  document.getElementById('elim-badge').textContent =
+    state.elimMode ? '點選牌...' : `×${state.elimCount}`;
+}
+
+function renderLevelBar() {
+  const lv = LEVELS[state.levelIdx];
+  document.getElementById('level-title').textContent =
+    `${lv.name}　${lv.sub}`;
+
+  const dots = document.getElementById('level-dots');
+  dots.innerHTML = '';
+  LEVELS.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'level-dot' +
+      (i < state.levelIdx ? ' done' : i === state.levelIdx ? ' active' : '');
+    dots.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// ANIMATIONS & EFFECTS
+// ═══════════════════════════════════════════════
+function animOut(tile, cb) {
+  if (!tile.el) { cb(); return; }
+  tile.el.style.animation = `tileLeave ${Math.round(300 * ANIM_SPEED)}ms ease forwards`;
+  tile.el.style.pointerEvents = 'none';
+  setTimeout(cb, Math.round(280 * ANIM_SPEED));
+}
+
+function showPop(text, color) {
+  const el = document.createElement('div');
+  el.className = 'score-pop';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.left  = (window.innerWidth  / 2 - 70) + 'px';
+  el.style.top   = (window.innerHeight / 2 - 80) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+}
+
+function spawnConfetti(boxId) {
+  const box = document.getElementById(boxId);
+  const colors = ['#FFB3C6','#FFD4A3','#D4B3FF','#FFE878','#B3F0FF','#A8FFB3','#FFB3A3'];
+  for (let i = 0; i < 32; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti';
+    p.style.cssText = `
+      left:${5+Math.random()*90}%;
+      top:-10px;
+      background:${colors[i % colors.length]};
+      width:${6+Math.random()*9}px;
+      height:${6+Math.random()*9}px;
+      border-radius:${Math.random()>.5?'50%':'3px'};
+      animation-duration:${0.8+Math.random()*1.4}s;
+      animation-delay:${Math.random()*0.5}s;
+    `;
+    box.appendChild(p);
+    setTimeout(() => p.remove(), 2800);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════
+goToLevel(0);
+</script>
+</body>
+</html>
